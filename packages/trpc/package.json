@@ -1,0 +1,17 @@
+{
+  "name": "@ll-xq/trpc",
+  "module": "index.ts",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "type": "module",
+  "dependencies": {
+    "@trpc/server": "^11.4.4",
+    "superjson": "^2.2.2",
+    "uuid": "^11.1.0",
+    "zod": "^4.0.15"
+  }
+}

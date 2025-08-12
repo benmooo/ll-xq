@@ -1,0 +1,18 @@
+{
+  "name": "ll-xq",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "eslint": "^9.33.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2"
+  }
+}

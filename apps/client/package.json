@@ -1,0 +1,28 @@
+{
+  "name": "rsbuild-solid-ts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rsbuild build",
+    "check": "biome check --write",
+    "dev": "rsbuild dev --open",
+    "format": "biome format --write",
+    "preview": "rsbuild preview"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.15.3",
+    "@trpc/client": "^11.4.4",
+    "solid-js": "^1.9.7",
+    "superjson": "^2.2.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.0.6",
+    "@rsbuild/core": "^1.4.13",
+    "@rsbuild/plugin-babel": "^1.0.5",
+    "@rsbuild/plugin-solid": "^1.0.5",
+    "@tailwindcss/postcss": "^4.1.11",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.9.2"
+  }
+}
