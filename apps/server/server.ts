@@ -22,6 +22,24 @@ export function createServer(opts: ServerOptions) {
     trpcOptions: { router: appRouter, createContext },
   });
 
+  // After registering the tRPC plugin, access the WebSocket server
+  server.ready(() => {
+    if (server.websocketServer) {
+      server.websocketServer.on('connection', (ws: any) => {
+        console.log('Client connected!');
+
+        ws.on('close', () => {
+          console.log('Client disconnected!');
+          // Perform any cleanup or state updates related to the disconnected client
+        });
+
+        ws.on('error', () => {
+          console.error('WebSocket error...');
+        });
+      });
+    }
+  });
+
   server.get('/', async () => {
     return { hello: 'wait-on 💨' };
   });

@@ -76,6 +76,7 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
   // --- Event Handlers ---
   const handleDragStart = (e: MouseEvent, sourceSquare: Square) => {
     if (!props.draggable) return;
+
     const piece = props.position[sourceSquare];
     if (!piece) return;
 

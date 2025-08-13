@@ -69,7 +69,7 @@ export function objToFen(obj: PositionObject): string {
 
 export const START_POSITION = fenToObj(START_FEN);
 
-console.log(START_FEN);
-console.log(fenToObj(START_FEN));
-console.log(objToFen(START_POSITION));
-console.log('a == b', START_FEN === objToFen(START_POSITION));
+// console.log(START_FEN);
+// console.log(fenToObj(START_FEN));
+// console.log(objToFen(START_POSITION));
+// console.log('a == b', START_FEN === objToFen(START_POSITION));

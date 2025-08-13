@@ -20,6 +20,10 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Player } from '../../types';
 import type { Context } from '../context';
 import { ok, fail } from '../mutation-response';
+import { pipe } from 'fp-ts/lib/function';
+import * as E from 'fp-ts/Either';
+import { identity } from 'fp-ts';
+import { TRPCError } from '@trpc/server';
 
 type JoinRoomErrorEvent = z.infer<typeof joinErrorEventSchema>;
 type JoinRoomSuccessEvent = z.infer<typeof joinSuccessEventSchema>;
@@ -50,47 +54,52 @@ export const gameRouter = router({
 
   // join room
   joinRoom: publicProcedure
-    .input(z.object({ roomId: z.string(), playerName: z.string() }))
-    .mutation(({ input, ctx }): MutationResponse => {
-      const room = ctx.roomManager.getRoom(input.roomId);
-      if (!room) return fail('Room not found');
-      if (room.players.length >= 2) return fail('Room is full');
+    .input(
+      // playerId for player who leaved the room and re-join the room
+      z.object({ roomId: z.string(), playerName: z.string(), playerId: z.string().optional() }),
+    )
+    .mutation(({ input, ctx }) => {
+      const { roomId, playerName, playerId } = input;
 
-      const players = room.players;
+      return pipe(
+        ctx.roomManager.joinRoomPlayer(roomId, playerName, playerId),
+        E.tap((player) => {
+          const event: JoinRoomSuccessEvent = {
+            type: 'joinSuccess',
+            payload: {
+              roomId: roomId,
+              playerName: player.name,
+              side: player.side,
+            },
+          };
+          broadcastRoomEvent(ctx, roomId, event);
 
-      // join room
-      const player: Player = {
-        id: uuidv4(),
-        name: input.playerName,
-        side: players.length === 0 ? 'r' : 'b',
-      };
-      room.players.push(player);
+          return E.right(null);
+        }),
+        E.tap((player) => {
+          // emit game start event
+          const room = ctx.roomManager.getRoom(roomId)!;
+          const event: GameStartEvent = {
+            type: 'gameStart',
+            payload: {
+              fen: room.state.fen(),
+              turn: room.state.turn() as 'r' | 'b',
+              players: room.players
+                .entries()
+                .map(([_, p]) => ({ name: p.name, side: p.side }))
+                .toArray(),
+            },
+          };
+          broadcastRoomEvent(ctx, roomId, event);
 
-      // emit a room event
-      const event: JoinRoomSuccessEvent = {
-        type: 'joinSuccess',
-        payload: {
-          roomId: room.id,
-          playerName: player.name,
-          side: player.side,
-        },
-      };
-
-      broadcastRoomEvent(ctx, room.id, event);
-
-      // emit game start event
-      const gameStartEvent: GameStartEvent = {
-        type: 'gameStart',
-        payload: {
-          fen: room.state.fen(),
-          turn: room.state.turn() as 'r' | 'b',
-          players: room.players.map((p) => ({ name: p.name, side: p.side })),
-        },
-      };
-
-      broadcastRoomEvent(ctx, room.id, gameStartEvent);
-
-      return ok({ roomId: room.id, player: player });
+          return E.right(null);
+        }),
+        // map to MutationResponse
+        E.fold(
+          (err) => fail(err),
+          (player) => ok({ roomId: roomId, player }),
+        ),
+      );
     }),
 
   move: publicProcedure.input(moveInputSchema).mutation(({ input, ctx }): MutationResponse => {
@@ -99,7 +108,7 @@ export const gameRouter = router({
     const room = ctx.roomManager.getRoom(roomId);
     if (!room) return fail('Room not found');
 
-    const player = room.players.find((p) => p.id === playerId);
+    const player = room.players.get(playerId);
     if (!player) return fail('Player not found');
 
     if (player.side !== room.state.turn()) return fail('Not your turn');
@@ -168,12 +177,61 @@ export const gameRouter = router({
 
   // subscriptions
   onRoomEvent: publicProcedure
-    .input(z.object({ roomId: z.string() }))
+    .input(z.object({ roomId: z.string(), playerId: z.string() }))
     .subscription(async function* ({ input, signal, ctx }) {
+      const { roomId, playerId } = input;
+      const room = ctx.roomManager.getRoom(roomId);
+      if (!room) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
+      }
+      if (!room.players.get(playerId)) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Player not in room' });
+      }
+
+      ctx.roomManager.markPlayerOnline(input.roomId, input.playerId);
+
+      signal?.addEventListener('abort', () => {
+        ctx.roomManager.markPlayerOffline(roomId, playerId);
+      });
+
       const iterator = on(ctx.eventBus, `roomEvent:${input.roomId}`, { signal });
       for await (const [data] of iterator) {
         yield data as RoomBroadcastEvent;
       }
+    }),
+
+  // ping - pong mechanism
+  ping: publicProcedure
+    .input(z.object({ roomId: z.string(), playerId: z.string() }))
+    .mutation(({ input: { roomId, playerId }, ctx }) => {
+      ctx.roomManager.ping(roomId, playerId);
+      return { ok: true };
+    }),
+
+  roomState: publicProcedure
+    .input(z.object({ roomId: z.string(), playerId: z.string() }))
+    .query(({ input, ctx }) => {
+      const { roomId, playerId } = input;
+      const room = ctx.roomManager.getRoom(roomId);
+      if (!room) {
+        return fail('Room not found');
+      }
+
+      const player = room.players.get(playerId);
+      if (!player) {
+        return fail('Player not found in this room');
+      }
+
+      return ok({
+        fen: room.state.fen(),
+        turn: room.state.turn(),
+        players: Array.from(room.players.values()).map(({ name, side, online }) => ({
+          name,
+          side,
+          online,
+        })),
+        // more fields here
+      });
     }),
 });
 

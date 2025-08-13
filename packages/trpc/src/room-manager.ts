@@ -1,15 +1,25 @@
-import type { Room } from './types';
+import type { Player, Room } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { createXiangqi } from '@ll-xq/game-core';
+import * as E from 'fp-ts/Either';
+import { either } from 'fp-ts';
 
 export class RoomManager {
   private rooms = new Map<string, Room>();
+
+  constructor(
+    private timeoutMs: number = 60 * 1000,
+    private destroyDelayMs: number = 60 * 2 * 1000,
+  ) {
+    // 定时扫描玩家是否掉线
+    setInterval(() => this.scanRooms(), 10 * 1000);
+  }
 
   createRoom(creatorName: string) {
     const roomId = uuidv4();
     const room: Room = {
       id: roomId,
-      players: [],
+      players: new Map<string, Player>(),
       state: createXiangqi(),
       createdAt: Date.now(),
       createdBy: creatorName,
@@ -18,12 +28,42 @@ export class RoomManager {
     return room;
   }
 
-  joinRoom(roomId: string, playerName: string) {
+  joinRoomPlayer(roomId: string, playerName: string, playerId?: string): E.Either<string, Player> {
     const room = this.rooms.get(roomId);
-    if (!room) throw new Error(`Room ${roomId} not found`);
-    if (room.players.length >= 2) throw new Error(`Room ${roomId} is full`);
-    room.players.push({ id: uuidv4(), name: playerName, side: 'b' });
-    return room;
+    if (!room) return either.left('Room not found');
+
+    if (playerId && room.players.has(playerId)) {
+      const player = room.players.get(playerId)!;
+      player.online = true;
+      player.lastActiveAt = Date.now();
+      return either.right(player);
+    }
+
+    if (room.players.size >= 2) return either.left('Room is full');
+
+    const id = uuidv4();
+    const player: Player = {
+      id,
+      name: playerName,
+      side: room.players.size === 0 ? 'r' : 'b',
+      online: true,
+      lastActiveAt: Date.now(),
+    };
+    room.players.set(id, player);
+
+    return either.right(player);
+  }
+
+  markPlayerOffline(roomId: string, playerId: string) {
+    const player = this.rooms.get(roomId)?.players.get(playerId);
+    if (!player) return;
+    player.online = false;
+  }
+
+  markPlayerOnline(roomId: string, playerId: string) {
+    const player = this.rooms.get(roomId)?.players.get(playerId);
+    if (!player) return;
+    player.online = true;
   }
 
   getRoom(roomId: string) {
@@ -36,5 +76,34 @@ export class RoomManager {
 
   listRooms() {
     return Array.from(this.rooms.values());
+  }
+
+  ping(roomId: string, playerId: string) {
+    const player = this.rooms.get(roomId)?.players.get(playerId);
+    if (player) {
+      player.lastActiveAt = Date.now();
+      player.online = true;
+    }
+  }
+
+  private scanRooms() {
+    const now = Date.now();
+    for (const [roomId, room] of this.rooms) {
+      for (const [playerId, player] of room.players) {
+        if (now - player.lastActiveAt > this.timeoutMs) {
+          player.online = false;
+        }
+      }
+
+      const allOffline = room.players
+        .entries()
+        .every(([_, p]) => !p.online && now - p.lastActiveAt > this.destroyDelayMs);
+      if (allOffline) {
+        console.log('delete room due to inactivity:', room);
+        this.deleteRoom(roomId);
+      }
+    }
+    // list the result
+    console.log('scan rooms result: ', this.listRooms());
   }
 }

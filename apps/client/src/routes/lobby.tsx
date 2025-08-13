@@ -1,14 +1,21 @@
 import { createSignal } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
+import { trpc } from '~/lib/core/trpc';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Lobby() {
   const [showJoinModal, setShowJoinModal] = createSignal(false);
   const [roomCode, setRoomCode] = createSignal('');
   const navigate = useNavigate();
 
-  const handleNewRoom = () => {
-    // TODO: Implement new room creation logic
-    console.log('Creating new room...');
+  const handleNewRoom = async () => {
+    const creatorName = uuidv4().slice(0, 8);
+    const res = await trpc.game.createRoom.mutate({ creatorName });
+
+    if (!res.success) return console.error('Failed to create room');
+
+    const { roomId } = res.data;
+    navigate(`/room/${roomId}`);
   };
 
   const handleJoinRoom = () => {

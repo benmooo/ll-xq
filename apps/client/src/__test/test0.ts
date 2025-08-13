@@ -12,7 +12,7 @@ async function start() {
       splitLink({
         condition(op) {
           if (op.type === 'subscription') return true;
-          if (op.type === 'mutation' && op.path.startsWith('game.')) return true;
+          if (op.path.startsWith('game.')) return true;
           // other mutation/query -- through HTTP
           return false;
         },
@@ -25,18 +25,17 @@ async function start() {
     ],
   });
 
-  const version = await trpc.api.version.query();
-  console.log('>>> anon:version:', version);
-
-  const hello = await trpc.api.hello.query({ username: 'John' });
-  console.log('>>> anon:hello:', hello);
-
   await new Promise<void>((resolve) => {
     trpc.game.onRoomEvent.subscribe(
-      { roomId: 'room-uuid' },
+      { roomId: 'room-uuid', playerId: 'player-uuid' },
       {
-        onData(data) {},
-        onError(error) {},
+        onData(data) {
+          console.log('>>> room-event:', data);
+        },
+        onError(error) {
+          console.error('>>> room-event:error:', error);
+          resolve();
+        },
         onComplete() {
           resolve();
         },

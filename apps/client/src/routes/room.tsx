@@ -1,18 +1,139 @@
 import { useParams } from '@solidjs/router';
 import { XiangqiBoard } from '~/components/xq-board';
-import { createSignal, onMount } from 'solid-js';
-import { objToFen, START_POSITION, type PositionObject, type Square } from '../utils/xq-board';
+import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { fenToObj, objToFen, START_FEN, type Piece, type Square } from '../utils/xq-board';
+import { trpc } from '~/lib/core/trpc';
+import { v4 as uuidv4 } from 'uuid';
+import type { Player } from '@ll-xq/trpc/src/types';
 
 export default function GameRoom() {
   // get room id from solid router
   const roomId = useParams().id;
 
-  const [position, setPosition] = createSignal<PositionObject>(START_POSITION);
-  const [orientation, setOrientation] = createSignal<'red' | 'black'>('red');
-  const [fen, setFen] = createSignal(objToFen(START_POSITION));
+  const [playerSide, setPlayerSide] = createSignal<'r' | 'b'>('r');
+  const orientation = () => (playerSide() === 'r' ? 'red' : 'black');
 
-  onMount(() => {
-    // api.example.hello.query('fd');
+  const [fen, setFen] = createSignal(START_FEN);
+  const position = () => fenToObj(fen());
+  // game state current turn
+  const [turn, setTurn] = createSignal<'r' | 'b'>('r');
+
+  const [playerId, setPlayerId] = createSignal<string | null>(localStorage.getItem('playerId'));
+
+  createEffect(() => {
+    // Anytime `playerId` changes, update localStorage
+    localStorage.setItem('playerId', JSON.stringify(playerId()));
+  });
+
+  onMount(async () => {
+    // when player joins the room we should
+    // 1. try to join the room with the playerId?( which is stored in the localStorage), there are two cases
+    //    - if success, fetch the game state and update the position
+    //    - if not, display an error message
+    const { success, error, data } = await trpc.game.joinRoom.mutate({
+      roomId,
+      playerName: `p-${uuidv4().slice(0, 8)}`,
+      playerId: playerId() ?? undefined,
+    });
+
+    if (!success) return console.error(error);
+
+    const {
+      player: { id, side },
+    } = data as { player: Player };
+
+    // ------------- update player id
+    if (id !== playerId()) {
+      setPlayerId(id); // which will update the localStorage
+    }
+
+    // ------------- init ping-pong to keep alive
+    const interval = setInterval(() => {
+      trpc.game.ping.mutate({ roomId, playerId: id });
+    }, 10 * 1000);
+    onCleanup(() => clearInterval(interval));
+
+    //------------------ subscribe to room events
+    const sub = trpc.game.onRoomEvent.subscribe(
+      {
+        roomId,
+        playerId: id,
+      },
+      {
+        onData: (event) => {
+          switch (event.type) {
+            case 'error':
+              console.log(event.payload.message);
+              break;
+
+            case 'gameStart':
+              console.log('game start', event.payload);
+              break;
+            case 'gameOver':
+              console.log('game over', event.payload);
+              break;
+            case 'roomCreated':
+              console.log('room created', event.payload);
+              break;
+
+            case 'inCheck':
+              console.log('in check', event.payload);
+              break;
+            case 'invalidMove':
+              console.log('invalid move', event.payload);
+              break;
+            case 'joinError':
+              console.log('join error', event.payload);
+              break;
+
+            case 'joinSuccess':
+              console.log('player joined room: ', event.payload);
+              break;
+
+            case 'moveMade':
+              console.log('move made', event.payload);
+              break;
+
+            default:
+              console.log('unknown event', event);
+          }
+        },
+        onError: (error) => {
+          console.error('room event error', error);
+        },
+        onComplete: () => {
+          console.log('room event subscription completed');
+          sub.unsubscribe();
+        },
+      },
+    );
+
+    // ------------ reload game state
+    if (side !== playerSide()) {
+      setPlayerSide(side);
+    }
+
+    // reload the game state
+    const res = await trpc.game.roomState.query({
+      roomId,
+      playerId: id,
+    });
+
+    if (!res.success) return console.error(res.error);
+
+    const {
+      fen: f,
+      turn: t,
+      // players,
+    } = res.data as {
+      fen: string;
+      turn: 'r' | 'b';
+      players: { name: string; side: 'r' | 'b'; online: boolean };
+    };
+
+    if (t !== turn()) setTurn(t);
+
+    if (f !== fen()) setFen(f);
   });
 
   // --- Logic is handled by the Parent ---
@@ -35,18 +156,25 @@ export default function GameRoom() {
       newPos[destination] = piece;
 
       // Update the state. The board will reactively re-render.
-      setPosition(newPos);
       setFen(objToFen(newPos));
     }
   };
 
   const resetBoard = () => {
-    setPosition(START_POSITION);
-    setFen(objToFen(START_POSITION));
+    setFen(START_FEN);
   };
 
   const flipBoard = () => {
-    setOrientation((o) => (o === 'red' ? 'black' : 'red'));
+    setPlayerSide((side) => (side === 'r' ? 'b' : 'r'));
+  };
+
+  const onDragStart = (square: Square, piece: Piece) => {
+    console.log(`Drag started on ${square} with piece ${piece}`);
+
+    if (!piece.startsWith(playerSide())) return false;
+    if (turn() !== playerSide()) return false;
+
+    return true;
   };
 
   return (
@@ -58,13 +186,7 @@ export default function GameRoom() {
           draggable={true}
           showNotation={true}
           onPieceDrop={handlePieceDrop}
-          onDragStart={(square, piece) => {
-            console.log(`Drag started on ${square} with piece ${piece}`);
-            // Example: only allow red pieces to be dragged
-            // if (piece.startsWith('b')) {
-            //   return false; // This would cancel the drag
-            // }
-          }}
+          onDragStart={onDragStart}
         />
       </div>
 
