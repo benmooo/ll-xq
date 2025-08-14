@@ -74,47 +74,92 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
   });
 
   // --- Event Handlers ---
-  const handleDragStart = (e: MouseEvent, sourceSquare: Square) => {
+  // 结合鼠标和触控事件的类型
+  type MouseOrTouchEvent = MouseEvent | TouchEvent;
+
+  const handleDragStart = (e: MouseOrTouchEvent, sourceSquare: Square) => {
     if (!props.draggable) return;
 
     const piece = props.position[sourceSquare];
     if (!piece) return;
 
-    // Allow parent to cancel drag
     if (props.onDragStart && props.onDragStart(sourceSquare, piece) === false) {
       return;
     }
 
+    // 阻止默认行为，这在移动设备上尤其重要，可以防止页面滚动
     e.preventDefault();
 
-    // 计算偏移量
-    const target = e.target as HTMLElement;
+    // 获取事件的坐标和目标元素
+    let clientX: number, clientY: number;
+    let target: HTMLElement;
+
+    if (e instanceof MouseEvent) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+      target = e.target as HTMLElement;
+    } else {
+      // TouchEvent
+      const touch = e.touches[0];
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+      target = touch.target as HTMLElement;
+    }
+
     const rect = target.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
+    const offsetX = clientX - rect.left;
+    const offsetY = clientY - rect.top;
 
     setDragInfo({
       piece,
       source: sourceSquare,
-      x: e.clientX,
-      y: e.clientY,
+      x: clientX,
+      y: clientY,
       offsetX,
       offsetY,
     });
 
+    // 在全局 window 上同时监听鼠标和触控事件
     window.addEventListener('mousemove', handleDragMove);
     window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleDragMove);
+    window.addEventListener('touchend', handleDragEnd);
   };
 
-  const handleDragMove = (e: MouseEvent) => {
-    if (dragInfo()) {
-      setDragInfo((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
+  const handleDragMove = (e: MouseOrTouchEvent) => {
+    if (!dragInfo()) return;
+
+    let clientX: number, clientY: number;
+    if (e instanceof MouseEvent) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    } else {
+      // TouchEvent
+      const touch = e.touches[0];
+      if (!touch) return; // 没有触控点，退出
+      clientX = touch.clientX;
+      clientY = touch.clientY;
     }
+
+    setDragInfo((prev) => (prev ? { ...prev, x: clientX, y: clientY } : null));
   };
 
-  const handleDragEnd = (e: MouseEvent) => {
+  const handleDragEnd = (e: MouseOrTouchEvent) => {
     const info = dragInfo();
     if (!info) return;
+
+    let clientX: number;
+    let clientY: number;
+    if (e instanceof MouseEvent) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    } else {
+      // TouchEvent
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    }
 
     const board = boardRef();
     if (board) {
@@ -122,8 +167,8 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
       const colWidth = rect.width / 9;
       const rowHeight = rect.height / 10;
 
-      let col = Math.floor((e.clientX - rect.left) / colWidth);
-      let row = Math.floor((e.clientY - rect.top) / rowHeight);
+      let col = Math.floor((clientX - rect.left) / colWidth);
+      let row = Math.floor((clientY - rect.top) / rowHeight);
 
       // Adjust for orientation
       if (orientation() === 'black') {
@@ -143,6 +188,8 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
     setDragInfo(null);
     window.removeEventListener('mousemove', handleDragMove);
     window.removeEventListener('mouseup', handleDragEnd);
+    window.removeEventListener('touchmove', handleDragMove);
+    window.removeEventListener('touchend', handleDragEnd);
   };
 
   return (
@@ -190,6 +237,7 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
                         class="xq-piece"
                         style={{ cursor: props.draggable ? 'grab' : 'default' }}
                         onMouseDown={(e) => handleDragStart(e, square)}
+                        onTouchStart={(e) => handleDragStart(e, square)}
                         draggable={false}
                       />
                     </Show>
