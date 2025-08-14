@@ -26,6 +26,7 @@ export default function GameRoom() {
   });
 
   onMount(async () => {
+    document.body.style.overflow = 'hidden';
     // when player joins the room we should
     // 1. try to join the room with the playerId?( which is stored in the localStorage), there are two cases
     //    - if success, fetch the game state and update the position
@@ -195,7 +196,7 @@ export default function GameRoom() {
           position={position()}
           orientation={orientation()}
           draggable={true}
-          showNotation={true}
+          // showNotation={true}
           onPieceDrop={onPieceDrop}
           onDragStart={onDragStart}
         />

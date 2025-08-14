@@ -37,6 +37,8 @@
   -ms-user-select: none; /* IE10+/Edge */
   user-select: none; /* Standard */
   -webkit-user-drag: none;
+
+  touch-action: none; /* Disable default touch actions like scrolling/pinch */
 }
 
 .xq-notation {
