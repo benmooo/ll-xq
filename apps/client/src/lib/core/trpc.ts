@@ -2,7 +2,8 @@ import type { AppRouter } from '@ll-xq/trpc';
 import { createTRPCClient, createWSClient, httpBatchLink, splitLink, wsLink } from '@trpc/client';
 import superjson from 'superjson';
 
-const apiEndpoint = process.env.LLXQ_SERVER_URL || 'http://localhost:3000';
+const apiEndpoint = import.meta.env.LLXQ_SERVER_URL || 'localhost:3000';
+
 const prefix = '/api/trpc';
 const urlEnd = `${apiEndpoint}${prefix}`;
 
