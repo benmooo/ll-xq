@@ -1,4 +1,4 @@
-import type { Player, Room } from './types';
+import type { Player, Room } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { createXiangqi } from '@ll-xq/game-core';
 import * as E from 'fp-ts/Either';
@@ -12,7 +12,8 @@ export class RoomManager {
     private destroyDelayMs: number = 60 * 2 * 1000,
   ) {
     // 定时扫描玩家是否掉线
-    setInterval(() => this.scanRooms(), 10 * 1000);
+    const interval = setInterval(() => this.scanRooms(), 10 * 1000);
+    console.log('RoomManager initialized');
   }
 
   createRoom(creatorName: string) {
@@ -34,6 +35,7 @@ export class RoomManager {
 
     if (playerId && room.players.has(playerId)) {
       const player = room.players.get(playerId)!;
+      console.log('player already in room:', player);
       player.online = true;
       player.lastActiveAt = Date.now();
       return either.right(player);
@@ -89,8 +91,16 @@ export class RoomManager {
   private scanRooms() {
     const now = Date.now();
     for (const [roomId, room] of this.rooms) {
+      console.log(
+        'room players:',
+        room.players
+          .values()
+          .map((player) => ({ id: player.id, side: player.side }))
+          .toArray(),
+      );
       for (const [playerId, player] of room.players) {
         if (now - player.lastActiveAt > this.timeoutMs) {
+          console.log('player offline:', player.id, player.side);
           player.online = false;
         }
       }
@@ -99,11 +109,11 @@ export class RoomManager {
         .entries()
         .every(([_, p]) => !p.online && now - p.lastActiveAt > this.destroyDelayMs);
       if (allOffline) {
-        console.log('delete room due to inactivity:', room);
+        console.log('delete room due to inactivity:', room.id);
         this.deleteRoom(roomId);
       }
     }
     // list the result
-    console.log('scan rooms result: ', this.listRooms());
+    console.log('scan rooms result: ', this.listRooms().length);
   }
 }

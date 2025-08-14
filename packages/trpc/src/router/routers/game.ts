@@ -15,14 +15,10 @@ import {
   moveMadeEventSchema,
   inCheckEventSchema,
 } from '@ll-xq/game-core';
-import type { RoomManager } from '../../room-manager';
-import { v4 as uuidv4 } from 'uuid';
-import type { Player } from '../../types';
 import type { Context } from '../context';
 import { ok, fail } from '../mutation-response';
 import { pipe } from 'fp-ts/lib/function';
 import * as E from 'fp-ts/Either';
-import { identity } from 'fp-ts';
 import { TRPCError } from '@trpc/server';
 
 type JoinRoomErrorEvent = z.infer<typeof joinErrorEventSchema>;
@@ -77,20 +73,22 @@ export const gameRouter = router({
           return E.right(null);
         }),
         E.tap((player) => {
-          // emit game start event
+          // emit game start event if there are two players
           const room = ctx.roomManager.getRoom(roomId)!;
-          const event: GameStartEvent = {
-            type: 'gameStart',
-            payload: {
-              fen: room.state.fen(),
-              turn: room.state.turn() as 'r' | 'b',
-              players: room.players
-                .entries()
-                .map(([_, p]) => ({ name: p.name, side: p.side }))
-                .toArray(),
-            },
-          };
-          broadcastRoomEvent(ctx, roomId, event);
+          if (room.players.size === 2) {
+            const event: GameStartEvent = {
+              type: 'gameStart',
+              payload: {
+                fen: room.state.fen(),
+                turn: room.state.turn() as 'r' | 'b',
+                players: room.players
+                  .entries()
+                  .map(([_, p]) => ({ name: p.name, side: p.side }))
+                  .toArray(),
+              },
+            };
+            broadcastRoomEvent(ctx, roomId, event);
+          }
 
           return E.right(null);
         }),

@@ -2,8 +2,9 @@ import type { AppRouter } from '@ll-xq/trpc';
 import { createTRPCClient, createWSClient, httpBatchLink, splitLink, wsLink } from '@trpc/client';
 import superjson from 'superjson';
 
+const domain = '192.168.1.117';
 const { port, prefix } = { port: 3000, prefix: '/api/trpc' };
-const urlEnd = `localhost:${port}${prefix}`;
+const urlEnd = `${domain}:${port}${prefix}`;
 
 const wsClient = createWSClient({ url: `ws://${urlEnd}` });
 export const trpc = createTRPCClient<AppRouter>({

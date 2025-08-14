@@ -2,6 +2,7 @@ import ws from '@fastify/websocket';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import fastify from 'fastify';
 import { appRouter, type AppRouter, createContext } from '@ll-xq/trpc';
+import cors from '@fastify/cors';
 
 export interface ServerOptions {
   dev?: boolean;
@@ -15,6 +16,11 @@ export function createServer(opts: ServerOptions) {
   const prefix = opts.prefix ?? '/api/trpc';
   const server = fastify({ logger: dev });
 
+  void server.register(cors, {
+    origin: '*',
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
   void server.register(ws);
   void server.register(fastifyTRPCPlugin, {
     prefix,
@@ -49,7 +55,7 @@ export function createServer(opts: ServerOptions) {
   };
   const start = async () => {
     try {
-      await server.listen({ port });
+      await server.listen({ port, host: '0.0.0.0' });
       console.log('listening on port', port);
     } catch (err) {
       server.log.error(err);

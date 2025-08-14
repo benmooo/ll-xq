@@ -22,7 +22,7 @@ export default function GameRoom() {
 
   createEffect(() => {
     // Anytime `playerId` changes, update localStorage
-    localStorage.setItem('playerId', JSON.stringify(playerId()));
+    localStorage.setItem('playerId', playerId() ?? '');
   });
 
   onMount(async () => {
@@ -30,28 +30,32 @@ export default function GameRoom() {
     // 1. try to join the room with the playerId?( which is stored in the localStorage), there are two cases
     //    - if success, fetch the game state and update the position
     //    - if not, display an error message
-    const { success, error, data } = await trpc.game.joinRoom.mutate({
+    const r = await trpc.game.joinRoom.mutate({
       roomId,
       playerName: `p-${uuidv4().slice(0, 8)}`,
       playerId: playerId() ?? undefined,
     });
 
-    if (!success) return console.error(error);
+    if (!r.success) return console.error(r.error);
 
     const {
       player: { id, side },
-    } = data as { player: Player };
+    } = r.data as { player: Player };
 
     // ------------- update player id
     if (id !== playerId()) {
       setPlayerId(id); // which will update the localStorage
     }
 
+    if (side !== playerSide()) {
+      setPlayerSide(side);
+    }
+
     // ------------- init ping-pong to keep alive
-    const interval = setInterval(() => {
+    const ping = setInterval(() => {
       trpc.game.ping.mutate({ roomId, playerId: id });
     }, 10 * 1000);
-    onCleanup(() => clearInterval(interval));
+    onCleanup(() => clearInterval(ping));
 
     //------------------ subscribe to room events
     const sub = trpc.game.onRoomEvent.subscribe(
@@ -107,11 +111,6 @@ export default function GameRoom() {
         },
       },
     );
-
-    // ------------ reload game state
-    if (side !== playerSide()) {
-      setPlayerSide(side);
-    }
 
     // reload the game state
     const res = await trpc.game.roomState.query({

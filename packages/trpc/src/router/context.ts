@@ -1,6 +1,5 @@
 import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify';
-import { MemoryEventBus } from './ee';
-import { RoomManager } from '../room-manager';
+import { AppDependencies } from '../lib/app-dependencies';
 
 export interface User {
   name: string[] | string;
@@ -8,9 +7,7 @@ export interface User {
 
 export function createContext({ req, res, info }: CreateFastifyContextOptions) {
   const user: User = { name: req.headers.username ?? 'anonymous' };
-  const eventBus = new MemoryEventBus();
-
-  const roomManager = new RoomManager();
+  const { eventBus, roomManager } = AppDependencies.getInstance();
 
   return { req, res, user, eventBus, roomManager };
 }

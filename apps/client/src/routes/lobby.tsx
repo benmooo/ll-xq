@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { trpc } from '~/lib/core/trpc';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,6 +7,8 @@ export default function Lobby() {
   const [showJoinModal, setShowJoinModal] = createSignal(false);
   const [roomCode, setRoomCode] = createSignal('');
   const navigate = useNavigate();
+
+  onMount(() => {});
 
   const handleNewRoom = async () => {
     const creatorName = uuidv4().slice(0, 8);
