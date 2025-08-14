@@ -4,9 +4,12 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/*/package.json ./packages/*/
 COPY apps/server/package.json ./apps/server/
+
+COPY packages ./packages
+COPY apps/server ./apps/server
+
 RUN bun install
 
-COPY . .
 
 RUN bun build apps/server/index.ts --outfile dist/index.js --target bun
 
