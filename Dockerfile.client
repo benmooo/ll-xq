@@ -23,7 +23,7 @@ RUN cd /app/apps/client && bun run build && cp -r dist /app/dist
 
 # Stage 2: Serve the SolidJS application with Caddy
 # Using the official Caddy image, which is optimized for serving static files.
-FROM caddy:latest-alpine
+FROM caddy:latest
 
 # Set the working directory to Caddy's default www root.
 WORKDIR /usr/share/caddy
