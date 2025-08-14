@@ -2,6 +2,8 @@ FROM oven/bun:latest AS builder
 
 WORKDIR /app
 COPY package.json bun.lock ./
+COPY packages/*/package.json ./packages/*/
+COPY apps/server/package.json ./apps/server/
 RUN bun install
 
 COPY . .
