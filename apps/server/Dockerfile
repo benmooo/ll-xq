@@ -1,8 +1,8 @@
-FROM oven/bun:latest AS base
+FROM oven/bun:latest AS builder
 
 WORKDIR /app
 COPY package.json ./
-RUN bun install --frozen-lockfile
+RUN bun install
 
 COPY . .
 
@@ -13,7 +13,6 @@ WORKDIR /app
 
 COPY --from=builder /app/dist/index.js ./index.js
 
-# 暴露端口
 EXPOSE 3000
 
 # 启动
