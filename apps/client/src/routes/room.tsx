@@ -69,7 +69,6 @@ export default function GameRoom() {
             case 'error':
               console.log(event.payload.message);
               break;
-
             case 'gameStart':
               console.log('game start', event.payload);
               break;
@@ -79,23 +78,29 @@ export default function GameRoom() {
             case 'roomCreated':
               console.log('room created', event.payload);
               break;
-
             case 'inCheck':
               console.log('in check', event.payload);
-              break;
-            case 'invalidMove':
-              console.log('invalid move', event.payload);
               break;
             case 'joinError':
               console.log('join error', event.payload);
               break;
-
             case 'joinSuccess':
               console.log('player joined room: ', event.payload);
               break;
-
             case 'moveMade':
-              console.log('move made', event.payload);
+              setTurn(event.payload.turn);
+              // check if the move is made by the opponent, the turn in payload means next turn
+              if (event.payload.turn === playerSide()) {
+                // now it's my turn, but we should update the board first with piece animation, because the opponent's move is already made
+                const { from, to, fen } = event.payload;
+                // animate the piece movement
+                // animatePieceMovement(from, to);
+
+                setFen(fen);
+              } else {
+                // the move was made by my self -- just do nothing
+                console.log('move made', event.payload);
+              }
               break;
 
             default:
@@ -136,14 +141,22 @@ export default function GameRoom() {
   });
 
   // --- Logic is handled by the Parent ---
-  const handlePieceDrop = (source: Square, destination: Square) => {
-    console.log(`User moved from ${source} to ${destination}`);
+  const onPieceDrop = async (source: Square, destination: Square) => {
+    if (source === destination) return false;
 
-    //
-    // HERE IS WHERE YOUR GAME LOGIC WOULD GO
-    // - Check whose turn it is
-    // - Use library `xiangqi.js` to validate the move
-    // - If the move is legal, update the position.
+    // validate move through server
+    const res = await trpc.game.move.mutate({
+      roomId,
+      playerId: playerId()!,
+      move: { from: source, to: destination },
+    });
+
+    if (!res.success) {
+      console.error(res.error?.message);
+      return false;
+    }
+
+    console.log(`User moved from ${source} to ${destination}`);
 
     // For this example, we'll just allow any move.
     const currentPos = position();
@@ -168,11 +181,10 @@ export default function GameRoom() {
   };
 
   const onDragStart = (square: Square, piece: Piece) => {
-    console.log(`Drag started on ${square} with piece ${piece}`);
-
     if (!piece.startsWith(playerSide())) return false;
     if (turn() !== playerSide()) return false;
 
+    console.log(`Drag started on ${square} with piece ${piece}`);
     return true;
   };
 
@@ -184,7 +196,7 @@ export default function GameRoom() {
           orientation={orientation()}
           draggable={true}
           showNotation={true}
-          onPieceDrop={handlePieceDrop}
+          onPieceDrop={onPieceDrop}
           onDragStart={onDragStart}
         />
       </div>
