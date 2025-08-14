@@ -15,6 +15,11 @@ RUN npm install
 # Copy the rest of your application code.
 COPY . .
 
+# 构建时传入环境变量（通过 --build-arg）
+ARG LLXQ_SERVER_URL
+ENV LLXQ_SERVER_URL=$LLXQ_SERVER_URL
+
+
 # Build the SolidJS application.
 # The default build output for SolidJS (with Vite) is typically 'dist'.
 # Ensure your build command outputs to a directory named 'dist'.
