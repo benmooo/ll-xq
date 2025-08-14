@@ -1,12 +1,12 @@
 FROM oven/bun:latest AS builder
 
 WORKDIR /app
-COPY package.json ./
+COPY package.json bun.lock ./
 RUN bun install
 
 COPY . .
 
-RUN bun build index.ts --outfile dist/index.js --target bun
+RUN bun build apps/server/index.ts --outfile dist/index.js --target bun
 
 FROM oven/bun:latest
 WORKDIR /app
