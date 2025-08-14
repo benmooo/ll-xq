@@ -1,5 +1,8 @@
 dev:
     bun run dev
 
+build:
+    bun run build
+
 build-image:
     podman build -t llxq-server .
