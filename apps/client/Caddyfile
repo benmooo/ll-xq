@@ -1,0 +1,26 @@
+# Define the address Caddy will listen on for HTTP traffic.
+# By using ':8080', Caddy will listen on all available network interfaces on port 8080.
+:8080 {
+    # Set the root directory for serving files.
+    # This path must match where your built SolidJS assets are copied inside the Docker container.
+    root * /usr/share/caddy
+
+    # Enable gzip compression for served files.
+    # This improves performance by reducing the size of assets transferred over the network.
+    encode gzip
+
+    # Serve static files from the root directory.
+    # This handles requests for your JavaScript, CSS, images, etc.
+    file_server
+
+    # Configure fallback for Single Page Applications (SPAs).
+    # If a requested file or directory is not found on the server,
+    # Caddy will serve 'index.html'. This is crucial for client-side routing.
+    try_files {path} /index.html
+
+    # Optional: Enable logging for debugging.
+    # log {
+    #     output stdout
+    #     format console
+    # }
+}

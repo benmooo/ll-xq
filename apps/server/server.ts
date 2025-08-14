@@ -1,7 +1,7 @@
 import ws from '@fastify/websocket';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import fastify from 'fastify';
-import { appRouter, type AppRouter, createContext } from '@ll-xq/trpc';
+import { appRouter, createContext } from '@ll-xq/trpc';
 import cors from '@fastify/cors';
 
 export interface ServerOptions {
@@ -31,23 +31,12 @@ export function createServer(opts: ServerOptions) {
   // After registering the tRPC plugin, access the WebSocket server
   server.ready(() => {
     if (server.websocketServer) {
-      server.websocketServer.on('connection', (ws: any) => {
-        console.log('Client connected!');
-
-        ws.on('close', () => {
-          console.log('Client disconnected!');
-          // Perform any cleanup or state updates related to the disconnected client
-        });
-
-        ws.on('error', () => {
-          console.error('WebSocket error...');
-        });
-      });
+      server.websocketServer.on('connection', (ws: any) => {});
     }
   });
 
   server.get('/', async () => {
-    return { hello: 'wait-on 💨' };
+    return { hello: 'fastify with trpc 💨' };
   });
 
   const stop = async () => {

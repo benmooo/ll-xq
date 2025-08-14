@@ -2,3 +2,6 @@ dev:
     bun run dev
 test:
     bun src/__test/test0.ts
+
+build:
+    bun run build
