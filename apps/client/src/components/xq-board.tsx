@@ -81,19 +81,20 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
   };
 
   return (
-    <div
-      class="relative aspect-[9/10] w-full bg-cover bg-no-repeat grid grid-cols-9 grid-rows-10"
-      style={{
-        'background-image': `url(${props.boardTheme ?? defaultBoardTheme})`,
-      }}
-    >
+    <div class="relative aspect-[9/10] w-full grid grid-cols-9 grid-rows-10">
+      <div
+        class="absolute inset-0 bg-cover bg-no-repeat filter saturate-90 hue-rotate-[10deg] rounded-lg"
+        style={{
+          'background-image': `url(${props.boardTheme ?? defaultBoardTheme})`,
+        }}
+      ></div>
       <For each={boardLayout()}>
         {(row) => (
           <For each={row}>
             {(square) => (
               <div
                 class={cn('w-full h-full relative', {
-                  'shadow-[inset_0_0_3px_3px_lime]': props.legalMoves?.includes(square),
+                  '!shadow-[inset_0_0_3px_3px_lime]': props.legalMoves?.includes(square),
                 })}
                 data-square={square}
                 onClick={() => props.onClickSquare(square)}

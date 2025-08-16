@@ -1,14 +1,30 @@
 import { useParams } from '@solidjs/router';
 import { XiangqiBoard, type HighlightSquares } from '~/components/xq-board';
-import { createEffect, createResource, createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createResource, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { fenToObj, objToFen, START_FEN, type Piece, type Square } from '../utils/xq-board';
 import { trpc } from '~/lib/core/trpc';
 import { v4 as uuidv4 } from 'uuid';
 import type { Player } from '@ll-xq/trpc/src/types';
+import { VsDebugRestart } from 'solid-icons/vs';
+import { VsLoading } from 'solid-icons/vs';
 
 export default function GameRoom() {
   // get room id from solid router
   const roomId = useParams().id;
+
+  const [gameStatus, setGameStatus] = createSignal<
+    'loading' | 'playing' | 'incheck' | 'checkmate' | 'stalemate' | 'draw'
+  >('loading');
+
+  const gameOver = () => {
+    const status = gameStatus();
+    return status === 'checkmate' || status === 'stalemate' || status === 'draw';
+  };
+
+  const [winner, setWinner] = createSignal<'r' | 'b' | 'draw' | null>(null);
+
+  const [turnNumber, setTurnNumber] = createSignal(0);
+  const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
 
   const [playerSide, setPlayerSide] = createSignal<'r' | 'b'>('r');
   const orientation = () => (playerSide() === 'r' ? 'red' : 'black');
@@ -89,22 +105,37 @@ export default function GameRoom() {
         onData: (event) => {
           switch (event.type) {
             case 'error':
-              console.log(event.payload.message);
+              setErrorMsg(event.payload.message);
               break;
             case 'gameStart':
-              console.log('game start', event.payload);
+              const { fen: f, turn: t } = event.payload;
+              setFen(f);
+              setTurn(t);
+              setGameStatus('playing');
+              // remove highlight and legal moves
+              setHighlightSquares({ r: null, b: null });
+              mutateLegalMoves(undefined);
               break;
             case 'gameOver':
               console.log('game over', event.payload);
+              const { winner, reason } = event.payload;
+              setWinner(winner);
+
+              if (reason === 'checkmate') setGameStatus('checkmate');
+              if (reason === 'stalemate') setGameStatus('stalemate');
+              if (winner === 'draw') setGameStatus('draw');
               break;
             case 'roomCreated':
               console.log('room created', event.payload);
               break;
             case 'inCheck':
               console.log('in check', event.payload);
+              const { sideInCheck: _ } = event.payload;
+              setGameStatus('incheck');
               break;
             case 'joinError':
               console.log('join error', event.payload);
+              setErrorMsg(event.payload.reason);
               break;
             case 'joinSuccess':
               console.log('player joined room: ', event.payload);
@@ -113,6 +144,7 @@ export default function GameRoom() {
               // check if the move is made by the opponent, the turn in payload means next turn
               const { from, to, fen, turn, side } = event.payload;
               setTurn(turn);
+              setTurnNumber(Number(fen.slice(-1)));
 
               if (event.payload.turn === playerSide()) {
                 // now it's my turn, but we should update the board first with piece animation, because the opponent's move is already made
@@ -122,6 +154,7 @@ export default function GameRoom() {
                 setFen(fen);
               } else {
               }
+              setGameStatus('playing');
 
               updateHighlightSquare(side, from as Square, to as Square);
               break;
@@ -159,15 +192,21 @@ export default function GameRoom() {
     if (f !== fen()) setFen(f);
   });
 
-  const resetBoard = () => {
-    setFen(START_FEN);
+  const restartGame = async () => {
+    const res = await trpc.game.restartGame.mutate({ roomId: roomId, playerId: playerId()! });
+    if (!res.success) {
+      return console.error(res.error);
+    }
   };
 
-  const flipBoard = () => {
-    setPlayerSide((side) => (side === 'r' ? 'b' : 'r'));
-  };
+  // const flipBoard = () => {
+  //   setPlayerSide((side) => (side === 'r' ? 'b' : 'r'));
+  // };
 
   const onClickPiece = async (s: Square) => {
+    // check if is our turn
+    if (turn() !== playerSide()) return;
+
     const currentActive = active();
 
     const currentPos = position();
@@ -237,8 +276,59 @@ export default function GameRoom() {
     await makeMove(from, to);
   };
 
+  const redDot = () => <div class="w-3 h-3 bg-red-600 opacity-80 rounded-full"></div>;
+  const blackDot = () => <div class="w-3 h-3 bg-black opacity-80 rounded-full"></div>;
+
+  const gameStatusUI = () => {
+    switch (gameStatus()) {
+      case 'loading':
+        return <VsLoading class="text-amber-900 animate-spin size-3" />;
+      case 'playing':
+        return (
+          <span class="relative flex size-3">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-lime-400 opacity-75"></span>
+            <span class="relative inline-flex size-3 rounded-full bg-lime-500"></span>
+          </span>
+        );
+
+      case 'incheck':
+        return <div class="text-red-600">将军</div>;
+      case 'checkmate':
+        return <div class="text-red-600">将死</div>;
+      case 'stalemate':
+        return <div class="text-red-600">穷途</div>;
+      case 'draw':
+        return <div class="text-amber-900">和棋</div>;
+      default:
+        return <div class="text-gray-600">?</div>;
+    }
+  };
+
   return (
-    <main class="min-h-screen flex flex-col items-center justify-center bg-amber-100">
+    <main class="min-h-screen flex flex-col items-center justify-center bg-amber-200">
+      <div class="text-4xl text-amber-900 mb-4">赖赖象棋</div>
+
+      <div class="flex space-x-4 text-amber-900 font-semibold  px-4">
+        {/* player side, turn, turn number, game status,  */}
+        <div class="flex space-x-2 items-center">
+          <span class="font-light text-xs text-amber-700">你是:</span>
+          {playerSide() === 'r' ? redDot() : blackDot()}
+        </div>
+        <div class="flex space-x-2 items-center">
+          <span class="font-light text-xs text-amber-700">轮到:</span>
+          {turn() === 'r' ? redDot() : blackDot()}
+        </div>
+        <div class="flex space-x-2 items-center">
+          <span class="font-light text-xs text-amber-700">轮次:</span>
+
+          <div>{turnNumber()}</div>
+        </div>
+        <div class="flex space-x-2 items-center">
+          <span class="font-light text-xs text-amber-700">状态:</span>
+          <div>{gameStatusUI()}</div>
+        </div>
+      </div>
+
       <div class="w-full max-w-2xl p-4">
         <XiangqiBoard
           position={position()}
@@ -253,17 +343,23 @@ export default function GameRoom() {
         />
       </div>
 
+      <Show when={errorMsg()}>
+        <div class="flex space-x-2 items-center w-full px-4">
+          <span class="font-light text-xs text-amber-700">Error:</span>
+          <div class="text-xs text-amber-800">{errorMsg()}</div>
+        </div>
+      </Show>
+
       <div class="flex space-x-3">
-        <button class="border p-2" onClick={resetBoard}>
-          Reset Board
-        </button>
-        <button class="border p-2" onClick={flipBoard}>
-          Flip Board
-        </button>
-      </div>
-      <div>
-        <strong>Current FEN:</strong>
-        <div class="text-xs text-amber-700">{fen()}</div>
+        <Show when={gameOver()}>
+          <button
+            class="border border-amber-900 p-2 rounded-xl flex items-center space-x-0.5"
+            onClick={restartGame}
+          >
+            <VsDebugRestart />
+            <div>RESTART</div>
+          </button>
+        </Show>
       </div>
     </main>
   );

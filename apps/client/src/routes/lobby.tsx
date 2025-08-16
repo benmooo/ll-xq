@@ -22,8 +22,6 @@ export default function Lobby() {
 
   const handleJoinRoom = () => {
     if (roomCode().trim()) {
-      // TODO: Implement join room logic
-      console.log('Joining room:', roomCode());
       setShowJoinModal(false);
       navigate(`/room/${roomCode()}`);
       setRoomCode('');

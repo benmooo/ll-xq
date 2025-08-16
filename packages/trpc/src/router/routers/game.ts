@@ -129,8 +129,6 @@ export const gameRouter = router({
     };
     broadcastRoomEvent(ctx, room.id, event);
 
-    room.state.game_over();
-
     // and then we check game status
     if (room.state.in_checkmate()) {
       const event: GameOverEvent = {
@@ -155,7 +153,7 @@ export const gameRouter = router({
         type: 'gameOver',
         payload: {
           winner: 'draw',
-          reason: 'stalemate',
+          reason: 'resign',
         },
       };
       broadcastRoomEvent(ctx, room.id, event);
@@ -251,6 +249,36 @@ export const gameRouter = router({
       const moves = room.state.moves({ square });
 
       return ok({ moves });
+    }),
+
+  // restart the game
+  restartGame: publicProcedure
+    .input(z.object({ roomId: z.string(), playerId: z.string() }))
+    .mutation(({ input: { roomId, playerId }, ctx }) => {
+      const room = ctx.roomManager.getRoom(roomId);
+      if (!room) {
+        return fail('Room not found');
+      }
+
+      const player = room.players.get(playerId);
+      if (!player) {
+        return fail('Player not found in this room');
+      }
+
+      room.state.reset();
+      const event: GameStartEvent = {
+        type: 'gameStart',
+        payload: {
+          fen: room.state.fen(),
+          turn: room.state.turn() as 'r' | 'b',
+          players: room.players
+            .entries()
+            .map(([_, p]) => ({ name: p.name, side: p.side }))
+            .toArray(),
+        },
+      };
+      broadcastRoomEvent(ctx, roomId, event);
+      return ok({ ok: true });
     }),
 });
 

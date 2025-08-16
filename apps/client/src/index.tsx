@@ -2,6 +2,7 @@ import { render } from 'solid-js/web';
 import { lazy } from 'solid-js';
 import { Router } from '@solidjs/router';
 import './assets/style/index.css';
+// import { Toaster } from 'solid-toast';
 
 const routes = [
   {
@@ -17,5 +18,13 @@ const routes = [
 
 const root = document.getElementById('root');
 if (root) {
-  render(() => <Router>{routes}</Router>, root);
+  render(
+    () => (
+      <div>
+        <Router>{routes}</Router>
+        {/*<Toaster />*/}
+      </div>
+    ),
+    root,
+  );
 }
