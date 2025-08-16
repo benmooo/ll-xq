@@ -79,6 +79,7 @@ export const gameStartEventSchema = baseEventSchema.extend({
 export const moveMadeEventSchema = baseEventSchema.extend({
   type: z.literal('moveMade'),
   payload: z.object({
+    side: sideSchema,
     from: z.string(),
     to: z.string(),
     fen: fenStringSchema,

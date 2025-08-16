@@ -1,6 +1,6 @@
 import { useParams } from '@solidjs/router';
-import { XiangqiBoard } from '~/components/xq-board';
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { XiangqiBoard, type HighlightSquares } from '~/components/xq-board';
+import { createEffect, createResource, createSignal, onCleanup, onMount } from 'solid-js';
 import { fenToObj, objToFen, START_FEN, type Piece, type Square } from '../utils/xq-board';
 import { trpc } from '~/lib/core/trpc';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,18 +19,45 @@ export default function GameRoom() {
   const [turn, setTurn] = createSignal<'r' | 'b'>('r');
 
   const [playerId, setPlayerId] = createSignal<string | null>(localStorage.getItem('playerId'));
+  // highlight squares
+  const [highlightSquares, setHighlightSquares] = createSignal<HighlightSquares>({
+    r: null,
+    b: null,
+  });
+
+  // active Piece
+  const [active, setActive] = createSignal<Square | null>(null);
+
+  // legal moves for the current piece
+  const [legalMoves, { mutate: mutateLegalMoves }] = createResource(active, async (square) => {
+    // check if is our turn
+    if (playerSide() !== turn()) return [];
+
+    const res = await trpc.game.legalMoves.query({
+      roomId,
+      playerId: playerId()!,
+      square: square,
+    });
+
+    if (!res.success) {
+      console.error(res.error);
+      return [];
+    }
+
+    const moves = res.data.moves as string[];
+    return moves.map((move) => move.slice(2)) as Square[];
+  });
 
   createEffect(() => {
-    // Anytime `playerId` changes, update localStorage
     localStorage.setItem('playerId', playerId() ?? '');
+  });
+
+  createEffect(() => {
+    if (!active()) mutateLegalMoves(undefined);
   });
 
   onMount(async () => {
     document.body.style.overflow = 'hidden';
-    // when player joins the room we should
-    // 1. try to join the room with the playerId?( which is stored in the localStorage), there are two cases
-    //    - if success, fetch the game state and update the position
-    //    - if not, display an error message
     const r = await trpc.game.joinRoom.mutate({
       roomId,
       playerName: `p-${uuidv4().slice(0, 8)}`,
@@ -43,14 +70,8 @@ export default function GameRoom() {
       player: { id, side },
     } = r.data as { player: Player };
 
-    // ------------- update player id
-    if (id !== playerId()) {
-      setPlayerId(id); // which will update the localStorage
-    }
-
-    if (side !== playerSide()) {
-      setPlayerSide(side);
-    }
+    if (id !== playerId()) setPlayerId(id);
+    if (side !== playerSide()) setPlayerSide(side);
 
     // ------------- init ping-pong to keep alive
     const ping = setInterval(() => {
@@ -89,19 +110,20 @@ export default function GameRoom() {
               console.log('player joined room: ', event.payload);
               break;
             case 'moveMade':
-              setTurn(event.payload.turn);
               // check if the move is made by the opponent, the turn in payload means next turn
+              const { from, to, fen, turn, side } = event.payload;
+              setTurn(turn);
+
               if (event.payload.turn === playerSide()) {
                 // now it's my turn, but we should update the board first with piece animation, because the opponent's move is already made
-                const { from, to, fen } = event.payload;
                 // animate the piece movement
                 // animatePieceMovement(from, to);
 
                 setFen(fen);
               } else {
-                // the move was made by my self -- just do nothing
-                console.log('move made', event.payload);
               }
+
+              updateHighlightSquare(side, from as Square, to as Square);
               break;
 
             default:
@@ -126,11 +148,7 @@ export default function GameRoom() {
 
     if (!res.success) return console.error(res.error);
 
-    const {
-      fen: f,
-      turn: t,
-      // players,
-    } = res.data as {
+    const { fen: f, turn: t } = res.data as {
       fen: string;
       turn: 'r' | 'b';
       players: { name: string; side: 'r' | 'b'; online: boolean };
@@ -141,38 +159,6 @@ export default function GameRoom() {
     if (f !== fen()) setFen(f);
   });
 
-  // --- Logic is handled by the Parent ---
-  const onPieceDrop = async (source: Square, destination: Square) => {
-    if (source === destination) return false;
-
-    // validate move through server
-    const res = await trpc.game.move.mutate({
-      roomId,
-      playerId: playerId()!,
-      move: { from: source, to: destination },
-    });
-
-    if (!res.success) {
-      console.error(res.error?.message);
-      return false;
-    }
-
-    console.log(`User moved from ${source} to ${destination}`);
-
-    // For this example, we'll just allow any move.
-    const currentPos = position();
-    const piece = currentPos[source];
-
-    if (piece) {
-      const newPos = { ...currentPos };
-      delete newPos[source];
-      newPos[destination] = piece;
-
-      // Update the state. The board will reactively re-render.
-      setFen(objToFen(newPos));
-    }
-  };
-
   const resetBoard = () => {
     setFen(START_FEN);
   };
@@ -181,12 +167,74 @@ export default function GameRoom() {
     setPlayerSide((side) => (side === 'r' ? 'b' : 'r'));
   };
 
-  const onDragStart = (square: Square, piece: Piece) => {
-    if (!piece.startsWith(playerSide())) return false;
-    if (turn() !== playerSide()) return false;
+  const onClickPiece = async (s: Square) => {
+    const currentActive = active();
 
-    console.log(`Drag started on ${square} with piece ${piece}`);
+    const currentPos = position();
+    const piece = currentPos[s];
+    if (!piece) return;
+
+    const isOwnPiece = piece.startsWith(playerSide());
+
+    if (!currentActive) {
+      if (!isOwnPiece) return;
+      return setActive(s);
+    }
+
+    if (currentActive === s) return setActive(null);
+
+    // can not eat own piece, activate a new piece
+    if (isOwnPiece) return setActive(s);
+
+    // check if is our turn
+    if (turn() !== playerSide()) return console.log('Not your turn');
+
+    // leverage serve to validate move
+    await makeMove(currentActive, s);
+  };
+
+  const updateHighlightSquare = (side: 'r' | 'b', from: Square, to: Square) => {
+    const color = side === 'r' ? 'yellow' : 'indigo';
+    setHighlightSquares((prev) => ({
+      ...prev,
+      [side]: [
+        { square: from, color },
+        { square: to, color },
+      ],
+    }));
+  };
+
+  const makeMove = async (from: Square, to: Square) => {
+    const res = await trpc.game.move.mutate({
+      roomId,
+      playerId: playerId()!,
+      move: { from, to },
+    });
+
+    if (!res.success) {
+      console.error(res.error?.message);
+      return false;
+    }
+
+    const currentPos = position();
+    const piece = currentPos[from];
+
+    const newPos = { ...currentPos };
+    delete newPos[from];
+    newPos[to] = piece;
+
+    setFen(objToFen(newPos));
+    setActive(null);
+
     return true;
+  };
+
+  const onClickSquare = async (to: Square) => {
+    const from = active();
+    if (!from) return;
+    if (!legalMoves()?.includes(to)) return;
+
+    await makeMove(from, to);
   };
 
   return (
@@ -195,10 +243,13 @@ export default function GameRoom() {
         <XiangqiBoard
           position={position()}
           orientation={orientation()}
-          draggable={true}
-          // showNotation={true}
-          onPieceDrop={onPieceDrop}
-          onDragStart={onDragStart}
+          showNotation={false}
+          // onPieceMove={onPieceMove}
+          onClickPiece={onClickPiece}
+          onClickSquare={onClickSquare}
+          highlightSquares={highlightSquares()}
+          legalMoves={legalMoves()}
+          active={active()}
         />
       </div>
 

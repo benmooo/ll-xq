@@ -120,6 +120,7 @@ export const gameRouter = router({
     const event: MoveMadeEvent = {
       type: 'moveMade',
       payload: {
+        side: player.side,
         from: move.from,
         to: move.to,
         fen: room.state.fen(),
@@ -230,6 +231,26 @@ export const gameRouter = router({
         })),
         // more fields here
       });
+    }),
+
+  // query legal moves
+  legalMoves: publicProcedure
+    .input(z.object({ roomId: z.string(), playerId: z.string(), square: z.string() }))
+    .query(({ input, ctx }) => {
+      const { roomId, playerId, square } = input;
+      const room = ctx.roomManager.getRoom(roomId);
+      if (!room) {
+        return fail('Room not found');
+      }
+
+      const player = room.players.get(playerId);
+      if (!player) {
+        return fail('Player not found in this room');
+      }
+
+      const moves = room.state.moves({ square });
+
+      return ok({ moves });
     }),
 });
 

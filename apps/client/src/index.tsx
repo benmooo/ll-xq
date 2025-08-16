@@ -7,6 +7,7 @@ const routes = [
   {
     path: '/',
     component: lazy(() => import('./routes/lobby')),
+    // component: lazy(() => import('./routes/test')),
   },
   {
     path: '/room/:id',
