@@ -127,6 +127,7 @@ export const gameRouter = router({
         fen: room.state.fen(),
         turn: nextTurn,
         piece: `${result.color}${result.piece.toUpperCase()}` as Piece,
+        captured: result.captured,
       },
     };
     broadcastRoomEvent(ctx, room.id, event);

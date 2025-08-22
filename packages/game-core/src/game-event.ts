@@ -93,6 +93,7 @@ export const moveMadeEventSchema = baseEventSchema.extend({
     fen: fenStringSchema,
     turn: sideSchema,
     piece: pieceSchema,
+    captured: z.string().optional(),
   }),
 });
 

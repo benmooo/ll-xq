@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Player } from '@ll-xq/trpc/src/types';
 import { VsDebugRestart } from 'solid-icons/vs';
 import { VsLoading } from 'solid-icons/vs';
+import { AudioManager } from '~/lib/sound/audio-manager';
 
 export default function GameRoom() {
   // get room id from solid router
@@ -66,6 +67,8 @@ export default function GameRoom() {
     return moves.map((move) => move.slice(2)) as Square[];
   });
 
+  const audioManager = new AudioManager();
+
   createEffect(() => {
     localStorage.setItem('playerId', playerId() ?? '');
   });
@@ -95,7 +98,11 @@ export default function GameRoom() {
     const ping = setInterval(() => {
       trpc.game.ping.mutate({ roomId, playerId: id });
     }, 10 * 1000);
-    onCleanup(() => clearInterval(ping));
+
+    onCleanup(() => {
+      clearInterval(ping);
+      audioManager.destroy();
+    });
 
     //------------------ subscribe to room events
     const sub = trpc.game.onRoomEvent.subscribe(
@@ -134,6 +141,7 @@ export default function GameRoom() {
               console.log('in check', event.payload);
               const { sideInCheck: _ } = event.payload;
               setGameStatus('incheck');
+              audioManager.play('notify');
               break;
             case 'joinError':
               console.log('join error', event.payload);
@@ -144,7 +152,7 @@ export default function GameRoom() {
               break;
             case 'moveMade':
               // check if the move is made by the opponent, the turn in payload means next turn
-              const { from, to, fen, turn, side, piece } = event.payload;
+              const { from, to, fen, turn, side, piece, captured } = event.payload;
               setTurn(turn);
               setTurnNumber(Number(fen.slice(-1)));
 
@@ -159,6 +167,13 @@ export default function GameRoom() {
               }
               setGameStatus('playing');
               updateHighlightSquare(side, from as Square, to as Square);
+
+              // play the sound effect for the move
+              if (captured) {
+                audioManager.play('capture');
+              } else {
+                audioManager.play('castle');
+              }
 
               break;
 
