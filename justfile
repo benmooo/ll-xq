@@ -8,3 +8,7 @@ build-client-image serverUrl:
 up:
     podman run -d -p 3000:3000 llxq-server
     podman run -d -p 8080:8080 llxq-client
+
+down:
+    podman stop $(podman ps -q)
+    podman rm $(podman ps -aq)
