@@ -1,15 +1,16 @@
-import { createSignal, createMemo, For, Show, onCleanup, onMount } from 'solid-js';
+import { createSignal, createMemo, For, Show, onMount, createEffect, onCleanup } from 'solid-js';
 import {
   type PositionObject,
   type Piece,
   type Square,
   COLUMNS,
-  isValidSquare,
+  COLUMN_MAP,
 } from '../utils/xq-board';
 import '../assets/style/xq-board.css';
 import defaultBoardTheme from '~/assets/img/xiangqiboards/wikimedia/xiangqiboard.svg';
 import { pieceImages } from '~/utils/piece-images';
 import { cn } from '~/lib/utils';
+// import { usePreviousEffect } from '~/lib/hooks/usePreviousEffect';
 
 // --- Component Props ---
 export interface XiangqiBoardProps {
@@ -32,6 +33,7 @@ export interface XiangqiBoardProps {
   // onPieceMove: (source: Square, destination: Square) => void;
   onClickPiece: (source: Square) => void;
   onClickSquare: (square: Square) => void;
+  movement?: Movement | null;
 }
 
 // --- Default Props ---
@@ -40,11 +42,10 @@ const defaultPieceTheme = (piece: Piece) => pieceImages[piece];
 // --- The Component ---
 export function XiangqiBoard(props: XiangqiBoardProps) {
   // --- Internal State for Dragging ---
-  const [dragInfo, setDragInfo] = createSignal<{
+  const [pieceMovement, setPieceMovement] = createSignal<{
     piece: Piece;
-    source: Square;
-    x: number;
-    y: number;
+    from: Square;
+    to: Square;
     offsetX: number;
     offsetY: number;
   } | null>(null);
@@ -53,7 +54,7 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
   const orientation = createMemo(() => props.orientation ?? 'red');
   const pieceTheme = createMemo(() => props.pieceTheme ?? defaultPieceTheme);
 
-  const side = createMemo(() => (orientation() === 'red' ? 'r' : 'b'));
+  // const side = createMemo(() => (orientation() === 'red' ? 'r' : 'b'));
 
   const boardLayout = createMemo(() => {
     const rows = Array.from({ length: 10 }, (_, i) => (orientation() === 'red' ? 9 - i : i));
@@ -61,7 +62,72 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
     return rows.map((row) => cols.map((col) => `${COLUMNS[col]}${row}` as Square));
   });
 
+  let boardRef: HTMLDivElement | undefined;
+  const [pieceWidth, setPieceWidth] = createSignal(0);
+
+  // when movement changes, animate the piece movement
+  createEffect(() => {
+    if (!props.movement) return;
+
+    // animate the piece movement
+    animatePiece(props.movement);
+  });
+
+  const animatePiece = (movement: Movement) => {
+    const { from, to, side, piece } = movement;
+
+    const [fromX, fromY] = from.split('').map((n, i) => (i === 0 ? COLUMN_MAP[n] : Number(n)));
+    const [toX, toY] = to.split('').map((n, i) => (i === 0 ? COLUMN_MAP[n] : Number(n)));
+
+    // animate the piece movement
+
+    let start = performance.now();
+
+    const animate = (t: number) => {
+      const progress = Math.min((t - start) / 200, 1);
+
+      const unit = pieceWidth();
+      const directionY = orientation() === 'red' ? -1 : 1;
+      const directionX = orientation() === 'red' ? 1 : -1;
+      const pieceMovement = {
+        piece,
+        from,
+        to,
+        offsetX: progress * (directionX * (toX - fromX)) * unit,
+        offsetY: progress * (directionY * (toY - fromY)) * unit,
+      };
+      setPieceMovement(pieceMovement);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setPieceMovement(null);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  };
+
   onMount(() => {});
+
+  createEffect(() => {
+    if (!boardRef) return;
+
+    // 初始测量
+    setPieceWidth(boardRef.offsetWidth / 9);
+
+    // 使用 ResizeObserver 监听尺寸变化
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setPieceWidth(entry.contentRect.width / 9);
+      }
+    });
+
+    observer.observe(boardRef);
+
+    // 清理函数
+    onCleanup(() => observer.disconnect());
+  });
 
   const highlightSquareStyle = (square: Square) => {
     const highlightArrays = [props.highlightSquares?.r, props.highlightSquares?.b];
@@ -81,7 +147,7 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
   };
 
   return (
-    <div class="relative aspect-[9/10] w-full grid grid-cols-9 grid-rows-10">
+    <div ref={boardRef} class="relative aspect-[9/10] w-full grid grid-cols-9 grid-rows-10">
       <div
         class="absolute inset-0 bg-cover bg-no-repeat filter saturate-90 hue-rotate-[10deg] rounded-lg"
         style={{
@@ -107,7 +173,13 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
                   </div>
                 </Show>
 
-                <Show when={props.position[square] && !(dragInfo()?.source === square)}>
+                <Show
+                  when={
+                    props.position[square] &&
+                    pieceMovement()?.from !== square &&
+                    pieceMovement()?.to !== square
+                  }
+                >
                   <div
                     style={{ 'background-image': `url(${pieceTheme()(props.position[square]!)})` }}
                     class={cn('w-full h-full', {
@@ -119,26 +191,25 @@ export function XiangqiBoard(props: XiangqiBoardProps) {
                     }}
                   ></div>
                 </Show>
+
+                {/* --- Render the piece being animated --- */}
+                <Show when={pieceMovement()?.from === square && pieceMovement()}>
+                  {(info) => (
+                    <img
+                      src={pieceTheme()(info().piece)}
+                      style={{
+                        // transform: `translate(${info().x}px, ${info().y}px)`,
+                        transform: `translate(${info().offsetX}px, ${info().offsetY}px)`,
+                      }}
+                      draggable={false}
+                    />
+                  )}
+                </Show>
               </div>
             )}
           </For>
         )}
       </For>
-
-      {/* --- Render the piece being animated --- */}
-      <Show when={dragInfo()}>
-        {(info) => (
-          <img
-            src={pieceTheme()(info().piece)}
-            class="xq-piece xq-dragging-piece"
-            style={{
-              // transform: `translate(${info().x}px, ${info().y}px)`,
-              transform: `translate(${info().x - info().offsetX}px, ${info().y - info().offsetY}px)`,
-            }}
-            draggable={false}
-          />
-        )}
-      </Show>
     </div>
   );
 }
@@ -147,4 +218,11 @@ export type HighlightSquare = { square: Square; color: string };
 export type HighlightSquares = {
   r: [HighlightSquare, HighlightSquare] | null;
   b: [HighlightSquare, HighlightSquare] | null;
+};
+
+export type Movement = {
+  side: 'r' | 'b';
+  piece: Piece;
+  from: Square;
+  to: Square;
 };

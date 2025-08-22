@@ -1,5 +1,5 @@
 import { useParams } from '@solidjs/router';
-import { XiangqiBoard, type HighlightSquares } from '~/components/xq-board';
+import { XiangqiBoard, type HighlightSquares, type Movement } from '~/components/xq-board';
 import { createEffect, createResource, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { fenToObj, objToFen, START_FEN, type Piece, type Square } from '../utils/xq-board';
 import { trpc } from '~/lib/core/trpc';
@@ -40,6 +40,8 @@ export default function GameRoom() {
     r: null,
     b: null,
   });
+
+  const [movement, setMovement] = createSignal<Movement | null>(null);
 
   // active Piece
   const [active, setActive] = createSignal<Square | null>(null);
@@ -142,7 +144,7 @@ export default function GameRoom() {
               break;
             case 'moveMade':
               // check if the move is made by the opponent, the turn in payload means next turn
-              const { from, to, fen, turn, side } = event.payload;
+              const { from, to, fen, turn, side, piece } = event.payload;
               setTurn(turn);
               setTurnNumber(Number(fen.slice(-1)));
 
@@ -152,11 +154,12 @@ export default function GameRoom() {
                 // animatePieceMovement(from, to);
 
                 setFen(fen);
+                setMovement({ from: from as Square, to: to as Square, side, piece });
               } else {
               }
               setGameStatus('playing');
-
               updateHighlightSquare(side, from as Square, to as Square);
+
               break;
 
             default:
@@ -244,6 +247,8 @@ export default function GameRoom() {
   };
 
   const makeMove = async (from: Square, to: Square) => {
+    setMovement({ from, to, side: playerSide(), piece: position()[from]! });
+
     const res = await trpc.game.move.mutate({
       roomId,
       playerId: playerId()!,
@@ -340,6 +345,7 @@ export default function GameRoom() {
           highlightSquares={highlightSquares()}
           legalMoves={legalMoves()}
           active={active()}
+          movement={movement()}
         />
       </div>
 

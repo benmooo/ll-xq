@@ -35,7 +35,6 @@ export class RoomManager {
 
     if (playerId && room.players.has(playerId)) {
       const player = room.players.get(playerId)!;
-      console.log('player already in room:', player);
       player.online = true;
       player.lastActiveAt = Date.now();
       return either.right(player);
@@ -91,16 +90,8 @@ export class RoomManager {
   private scanRooms() {
     const now = Date.now();
     for (const [roomId, room] of this.rooms) {
-      console.log(
-        'room players:',
-        room.players
-          .values()
-          .map((player) => ({ id: player.id, side: player.side }))
-          .toArray(),
-      );
       for (const [playerId, player] of room.players) {
         if (now - player.lastActiveAt > this.timeoutMs) {
-          console.log('player offline:', player.id, player.side);
           player.online = false;
         }
       }
@@ -109,11 +100,8 @@ export class RoomManager {
         .entries()
         .every(([_, p]) => !p.online && now - p.lastActiveAt > this.destroyDelayMs);
       if (allOffline) {
-        console.log('delete room due to inactivity:', room.id);
         this.deleteRoom(roomId);
       }
     }
-    // list the result
-    console.log('scan rooms result: ', this.listRooms().length);
   }
 }

@@ -14,6 +14,7 @@ import {
   type RoomBroadcastEvent,
   moveMadeEventSchema,
   inCheckEventSchema,
+  type Piece,
 } from '@ll-xq/game-core';
 import type { Context } from '../context';
 import { ok, fail } from '../mutation-response';
@@ -111,7 +112,7 @@ export const gameRouter = router({
 
     if (player.side !== room.state.turn()) return fail('Not your turn');
 
-    const result = room.state.move({ ...move, promotion: 'q' });
+    const result = room.state.move({ ...move, promotion: 'q' }) as any;
     if (!result) return fail('Invalid move');
 
     const nextTurn = room.state.turn() as 'r' | 'b';
@@ -125,6 +126,7 @@ export const gameRouter = router({
         to: move.to,
         fen: room.state.fen(),
         turn: nextTurn,
+        piece: `${result.color}${result.piece.toUpperCase()}` as Piece,
       },
     };
     broadcastRoomEvent(ctx, room.id, event);

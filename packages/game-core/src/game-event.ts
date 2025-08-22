@@ -75,6 +75,14 @@ export const gameStartEventSchema = baseEventSchema.extend({
   }),
 });
 
+export const PIECE_TYPES = ['K', 'A', 'B', 'N', 'R', 'C', 'P'] as const;
+export const SIDES = ['b', 'r'] as const;
+
+// 生成所有可能的组合
+const ALL_PIECES = SIDES.flatMap((side) => PIECE_TYPES.map((type) => `${side}${type}` as const));
+
+const pieceSchema = z.enum(ALL_PIECES);
+export type Piece = z.infer<typeof pieceSchema>;
 // 下棋动作完成
 export const moveMadeEventSchema = baseEventSchema.extend({
   type: z.literal('moveMade'),
@@ -84,6 +92,7 @@ export const moveMadeEventSchema = baseEventSchema.extend({
     to: z.string(),
     fen: fenStringSchema,
     turn: sideSchema,
+    piece: pieceSchema,
   }),
 });
 

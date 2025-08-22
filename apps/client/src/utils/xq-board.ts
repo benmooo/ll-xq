@@ -73,3 +73,15 @@ export const START_POSITION = fenToObj(START_FEN);
 // console.log(fenToObj(START_FEN));
 // console.log(objToFen(START_POSITION));
 // console.log('a == b', START_FEN === objToFen(START_POSITION));
+
+export const COLUMN_MAP: Record<string, number> = {
+  a: 0,
+  b: 1,
+  c: 2,
+  d: 3,
+  e: 4,
+  f: 5,
+  g: 6,
+  h: 7,
+  i: 8,
+};
